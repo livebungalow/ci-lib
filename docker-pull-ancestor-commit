@@ -1,0 +1,32 @@
+#!/bin/bash
+# Pull a docker image related to a git commit (or one of its ancestors).
+# Primes the docker cache and thus sometimes makes builds faster.
+# How to use:
+#   docker-pull-ancestor-commit HEAD 6789.dkr.ecr.us-west-2.amazonaws.com cache_hit
+#   docker build --cache-from cache_hit
+# (With docker-compose, add `cache_hit` to the cache_from list.)
+
+set -euo pipefail
+case $# in
+    3)
+        startingCommit=$1
+        repoURI=$2
+        resultTag=$3
+        ;;
+    *)
+        echo >&2 "usage: $0 STARTING_COMMIT REPO_URI RESULT_TAG"
+        exit 1
+        ;;
+esac
+
+git log --no-abbrev-commit --format=format:%H -n 25 "$startingCommit" |
+while read sha; do
+    imageURI=$repoURI:git-$sha
+    if docker pull --quiet "$imageURI"; then
+        echo >&2 "$0: pulled image related to $sha; tagging as $resultTag"
+        docker tag "$imageURI" "$resultTag"
+        break
+    else
+        echo >&2 "$0: failed to pull image related to $sha (no problem, just means nobody built it yet)"
+    fi
+done
