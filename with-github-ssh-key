@@ -1,0 +1,50 @@
+#!/bin/bash
+set -euo pipefail
+here=$(dirname "${BASH_SOURCE[0]}")
+me=$(basename "${BASH_SOURCE[0]}")
+
+usage() {
+cat <<EOF
+usage: $0 varname cmd [arg ...]
+
+where varname is the name of an environment variable
+containing a base64-encoded private ssh key.
+Runs cmd with ssh configured to use the given key for github.
+Deletes the key when it's done.
+
+Note the absence of a dollar sign!
+Right:
+    export MYKEY=\$(base64 < key.pem)
+    \$0 MYKEY pip install
+Wrong:
+    export MYKEY=\$(base64 < key.pem)
+    \$0 \$MYKEY pip install
+(This interface makes it a bit less likely that we'll print the key to a log.)
+EOF
+}
+
+if [ $# -lt 2 ]; then
+    usage >&2
+    exit 1
+fi
+varname=$1
+shift
+
+cleanup() {
+    if [ -f "${tmpkey:-}" ]; then rm -f "$tmpkey"; fi
+}
+trap cleanup EXIT
+
+tmpkey=$(mktemp)
+echo "${!varname}" |base64 --decode >"$tmpkey"
+mkdir -p ~/.ssh
+ln -s "$tmpkey" ~/.ssh/temporary_github_key
+
+touch ~/.ssh/config
+"$here"/update-block '# --- with-github-ssh-key' ~/.ssh/config <<EOF
+Host github.com
+User git
+IdentityFile ~/.ssh/temporary_github_key
+EOF
+
+"$@"
