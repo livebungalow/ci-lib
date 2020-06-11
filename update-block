@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+import os
+import os.path
+import sys
+from tempfile import mkstemp
+
+USAGE = """\
+usage: $0 blocksign file < new_contents
+
+Replace a section in file like
+    blocksign START
+    ...
+    blocksign END
+with the given new_contents.
+Add such a section at the end if none exists.
+"""
+
+
+def newlineless(lines):
+    for line in lines:
+        yield line.rstrip('\r\n')
+
+
+def edited(blocksign, input, new_contents):
+    startline = f'{blocksign} START'
+    endline = f'{blocksign} END'
+    inputlines = newlineless(input)
+    # copy up to (and including) startline
+    for line in inputlines:
+        yield line
+        if line == startline:
+            break
+    else:
+        yield startline
+    # insert new contents of block
+    yield from newlineless(new_contents)
+    # skip until (but not including) endline
+    for line in inputlines:
+        if line == endline:
+            yield line
+            break
+    else:
+        yield endline
+    # copy lines after endline
+    yield from inputlines
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print(USAGE, file=sys.stderr)
+        sys.exit(1)
+    _, blockname, filename = sys.argv
+    dirname, basename = os.path.split(filename)
+    tmpfd, tmpname = mkstemp(prefix=f'.update-block.{basename}.', dir=dirname)
+    with open(tmpfd, 'w') as output:
+        with open(filename) as input:
+            for line in edited(blockname, input, sys.stdin):
+                print(line, file=output)
+    os.replace(tmpname, filename)
