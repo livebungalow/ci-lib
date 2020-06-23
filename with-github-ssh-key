@@ -37,6 +37,8 @@ trap cleanup EXIT
 
 tmpkey=$(mktemp)
 echo "${!varname}" |base64 --decode >"$tmpkey"
+# check that we can read the private key, to fail early if e.g. it has a passphrase
+ssh-keygen -y -P "" -f "$tmpkey" >/dev/null
 mkdir -p ~/.ssh
 ln -s "$tmpkey" ~/.ssh/temporary_github_key
 
