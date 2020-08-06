@@ -8,20 +8,21 @@
 
 set -euo pipefail
 case $# in
-    3)
+    3 | 4)
         startingCommit=$1
         repoURI=$2
         resultTag=$3
+        tagPrefix=${4:-git-}
         ;;
     *)
-        echo >&2 "usage: $0 STARTING_COMMIT REPO_URI RESULT_TAG"
+        echo >&2 "usage: $0 STARTING_COMMIT REPO_URI RESULT_TAG [TAG_PREFIX]"
         exit 1
         ;;
 esac
 
 git log --no-abbrev-commit --format=format:%H -n 25 "$startingCommit" |
 while read sha; do
-    imageURI=$repoURI:git-$sha
+    imageURI=$repoURI:$tagPrefix$sha
     if docker pull --quiet "$imageURI"; then
         echo >&2 "$0: pulled image related to $sha; tagging as $resultTag"
         docker tag "$imageURI" "$resultTag"
